@@ -3,6 +3,10 @@
 // GPL-3.0, following the Gearmulator codebase. No ROM assets are included.
 #include <algorithm>
 #include <cstdint>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include "n2xLib/n2xrom.h"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -13,10 +17,10 @@
 
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    if (argc != 3)
     {
-        std::cerr << "Usage: n2xOverflashReference output.wav\n";
-        std::cerr << "Requires a valid Nord Lead 2X ROM in Gearmulator's usual ROM search location.\n";
+        std::cerr << "Usage: n2xOverflashReference /path/to/nord_lead_2x.bin output.wav\n";
+        std::cerr << "Reads user-supplied firmware locally; no firmware is included.\n";
         return 2;
     }
 
@@ -26,13 +30,22 @@ int main(int argc, char** argv)
     constexpr uint32_t noteOffSample = sampleRate * 2;
     try
     {
-        n2x::Hardware hardware;
+        std::ifstream input(argv[1], std::ios::binary);
+        if (!input) { std::cerr << "Could not open firmware file\n"; return 1; }
+        const std::vector<uint8_t> romBytes{std::istreambuf_iterator<char>(input),
+                                            std::istreambuf_iterator<char>()};
+        if (romBytes.size() != n2x::g_romSize || !n2x::Rom::isValidRom(romBytes))
+        {
+            std::cerr << "Firmware fails Nord Lead 2X size/signature checks\n";
+            return 1;
+        }
+        n2x::Hardware hardware(romBytes, argv[1]);
         if (!hardware.isValid())
         {
             std::cerr << "Nord Lead 2X ROM missing or invalid\n";
             return 1;
         }
-        synthLib::StereoWavSink sink(argv[1], sampleRate);
+        synthLib::StereoWavSink sink(argv[2], sampleRate);
         std::vector<dsp56k::TWord> left(blockSize), right(blockSize);
         bool noteOnSent = false;
         bool noteOffSent = false;
@@ -60,7 +73,7 @@ int main(int argc, char** argv)
             sink.write(left.data(), right.data(), blockSize);
         }
         std::cout << "Rendered " << durationSamples << " frames at " << sampleRate
-                  << " Hz to " << argv[1] << "\n";
+                  << " Hz to " << argv[2] << "\n";
         return 0;
     }
     catch (const std::exception& e)
