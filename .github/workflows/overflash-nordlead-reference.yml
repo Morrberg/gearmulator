@@ -1,0 +1,59 @@
+name: Overflash Nord Lead 2X build (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Gearmulator branch to build"
+        required: true
+        type: choice
+        options:
+          - feature/overflash-nordlead2x-bridge
+
+permissions:
+  contents: read
+
+concurrency:
+  group: overflash-n2x-manual
+  cancel-in-progress: false
+
+jobs:
+  build-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout fork and submodules
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake build-essential
+      - name: Configure reference tool only
+        run: |
+          cmake -S . -B build -G Ninja \
+            -Dgearmulator_BUILD_JUCEPLUGIN=OFF \
+            -DGEARMULATOR_BUILD_OVERFLASH_N2X_REFERENCE=ON \
+            -Dgearmulator_SYNTH_OSIRUS=OFF \
+            -Dgearmulator_SYNTH_OSTIRUS=OFF \
+            -Dgearmulator_SYNTH_VAVRA=OFF \
+            -Dgearmulator_SYNTH_XENIA=OFF \
+            -Dgearmulator_SYNTH_JE8086=OFF \
+            -Dgearmulator_SYNTH_88EMU=OFF \
+            -Dgearmulator_COMPONENT_DSPBRIDGE=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Build Nodal Red 2x WAV renderer
+        run: cmake --build build --target n2xOverflashReference --parallel 2
+      - name: Find executable
+        run: |
+          find build -type f -name n2xOverflashReference -exec cp '{}' ./n2xOverflashReference ';'
+          test -s ./n2xOverflashReference
+      - name: Upload build artifact (no firmware)
+        uses: actions/upload-artifact@v4
+        with:
+          name: n2xOverflashReference-linux
+          path: n2xOverflashReference
+          retention-days: 1
