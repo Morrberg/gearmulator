@@ -47,3 +47,27 @@ cmake --build build --target n2xOverflashReference --config Release
 ```
 
 The executable takes a **local, uncompressed 512 KiB firmware .bin** as its first argument, verifies its Nodal Red 2x signature, and writes the requested WAV to the second argument. Extract the firmware locally from your ZIP; never commit the ZIP or BIN. The test sends MIDI note C4 at time 0, releases it after 2 seconds and captures 3 seconds at the native 98,304 Hz. The model's boot preset is not matched to Overflash's parameters. This is a comparison fixture, not an officially supported standalone release.
+
+
+## First real boot/audio validation on Windows (no GitHub Actions)
+
+The full fork must be cloned locally with all submodules. From PowerShell:
+
+```powershell
+git clone --recurse-submodules --branch feature/overflash-nordlead2x-bridge https://github.com/Morrberg/gearmulator.git
+cd gearmulator
+cmake -S . -B build -Dgearmulator_BUILD_JUCEPLUGIN=OFF -DGEARMULATOR_BUILD_OVERFLASH_N2X_REFERENCE=ON
+cmake --build build --config Release --target n2xOverflashReference
+```
+
+Extract the **user-owned** `nord_lead_2x.bin` outside the repository and run the executable from its actual build output directory:
+
+```powershell
+& ".\build\source\claudia\n2x\n2xTestConsole\Release\n2xOverflashReference.exe" "C:\private-roms\nord_lead_2x.bin" "C:\temp\nodal_reference.wav"
+```
+
+The executable path may vary with generator. The WAV must contain 3 seconds at 98,304 Hz; verify that audio is **non-silent**, has a note-on at 0 and note-off at 2 s, and contains no clipping. Source size and signature checks alone do not establish successful boot. This target is opt-in and does not require the JUCE plugin to be built.
+
+The custom renderer's current phase 1 output uses the synthesizer's default boot patch. It is useful as a boot/audio smoke test; do **not** interpret it as an accurate timbre comparison against Overflash's intentionally different hand-configured patch until patch controls are matched.
+
+If configure/build or boot fails, capture the first failing compiler error or runtime exception and compare against the exact pinned Gearmulator fork revision. Avoid continuous Actions workflows; run the local executable manually.
