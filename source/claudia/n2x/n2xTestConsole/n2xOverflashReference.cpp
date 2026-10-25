@@ -17,16 +17,23 @@
 
 int main(int argc, char** argv)
 {
-    if (argc != 3)
+    if (argc < 3 || argc > 4)
     {
-        std::cerr << "Usage: n2xOverflashReference /path/to/nord_lead_2x.bin output.wav\n";
+        std::cerr << "Usage: n2xOverflashReference /path/to/nord_lead_2x.bin output.wav [diagnostic]\n";
         std::cerr << "Reads user-supplied firmware locally; no firmware is included.\n";
         return 2;
     }
 
+    // Diagnostic mode compares note-off and an additional All Notes Off
+    // command. The latter is deliberately absent from the standard A/B case.
+    const bool diagnostic = argc == 4 && std::string(argv[3]) == "diagnostic";
+    if (argc == 4 && !diagnostic) {
+        std::cerr << "Unknown mode; expected diagnostic\\n";
+        return 2;
+    }
     constexpr uint32_t blockSize = 64;
     constexpr uint32_t sampleRate = n2x::g_samplerate; // Native 98304 Hz
-    constexpr uint32_t durationSamples = sampleRate * 3;
+    constexpr uint32_t durationSamples = sampleRate * 4;
     constexpr uint32_t noteOffSample = sampleRate * 2;
     try
     {
@@ -49,6 +56,7 @@ int main(int argc, char** argv)
         std::vector<dsp56k::TWord> left(blockSize), right(blockSize);
         bool noteOnSent = false;
         bool noteOffSent = false;
+        bool allNotesOffSent = false;
 
         for (uint32_t offset = 0; offset < durationSamples; offset += blockSize)
         {
@@ -56,13 +64,22 @@ int main(int argc, char** argv)
             {
                 hardware.sendMidi({synthLib::MidiEventSource::Host, synthLib::M_NOTEON, 60, 102});
                 noteOnSent = true;
+                std::cerr << "MIDI Note On: frame " << offset << " (C4, velocity 102)\\n";
             }
             if (!noteOffSent && offset >= noteOffSample)
             {
                 hardware.sendMidi({synthLib::MidiEventSource::Host, synthLib::M_NOTEOFF, 60, 0});
                 noteOffSent = true;
+                std::cerr << "MIDI Note Off: frame " << offset << " (C4)\\n";
             }
 
+            if (diagnostic && !allNotesOffSent && offset >= sampleRate * 3)
+            {
+                hardware.sendMidi({synthLib::MidiEventSource::Host,
+                                   synthLib::M_CONTROLCHANGE, 123, 0});
+                allNotesOffSent = true;
+                std::cerr << "MIDI CC123 All Notes Off: frame " << offset << "\\n";
+            }
             hardware.processAudio(blockSize, blockSize);
             const auto& outs = hardware.getAudioOutputs();
             for (size_t i = 0; i < blockSize; ++i)
