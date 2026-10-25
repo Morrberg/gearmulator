@@ -71,3 +71,15 @@ The executable path may vary with generator. The WAV must contain 3 seconds at 9
 The custom renderer's current phase 1 output uses the synthesizer's default boot patch. It is useful as a boot/audio smoke test; do **not** interpret it as an accurate timbre comparison against Overflash's intentionally different hand-configured patch until patch controls are matched.
 
 If configure/build or boot fails, capture the first failing compiler error or runtime exception and compare against the exact pinned Gearmulator fork revision. Avoid continuous Actions workflows; run the local executable manually.
+
+
+## MIDI / firmware diagnostic (new revision)
+
+The fixture now renders **four seconds** so the release can be observed beyond the earlier three-second limit. It emits MIDI timestamp logs to stderr. Passing the optional fourth argument `diagnostic` sends MIDI CC123 (All Notes Off) at t=3s, allowing a controlled experiment:
+
+```sh
+n2xOverflashReference /private/roms/nord_lead_2x.bin reference-normal.wav
+n2xOverflashReference /private/roms/nord_lead_2x.bin reference-cc123.wav diagnostic
+```
+
+The normal recording sends Note On at 0s and Note Off at 2s only; the diagnostic recording additionally sends CC123 at 3s. Log lines confirm when the **host queues** MIDI events, not necessarily that the emulated firmware consumed the commands. Listen for a difference between the two recordings after 3s. A CC123 response will help distinguish sustain/patch behavior from a missing note release, but it does not alone prove firmware timing correctness. Keep the ROM private. This new test executable must be rebuilt manually before these options become available; prior build artifacts retain the earlier three-second behavior.
