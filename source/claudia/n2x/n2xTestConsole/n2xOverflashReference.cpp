@@ -28,7 +28,7 @@ int main(int argc, char** argv)
     // command. The latter is deliberately absent from the standard A/B case.
     const bool diagnostic = argc == 4 && std::string(argv[3]) == "diagnostic";
     if (argc == 4 && !diagnostic) {
-        std::cerr << "Unknown mode; expected diagnostic\\n";
+        std::cerr << "Unknown mode; expected diagnostic\n";
         return 2;
     }
     constexpr uint32_t blockSize = 64;
@@ -64,13 +64,13 @@ int main(int argc, char** argv)
             {
                 hardware.sendMidi({synthLib::MidiEventSource::Host, synthLib::M_NOTEON, 60, 102});
                 noteOnSent = true;
-                std::cerr << "MIDI Note On: frame " << offset << " (C4, velocity 102)\\n";
+                std::cerr << "MIDI Note On: frame " << offset << " (C4, velocity 102)\n";
             }
             if (!noteOffSent && offset >= noteOffSample)
             {
                 hardware.sendMidi({synthLib::MidiEventSource::Host, synthLib::M_NOTEOFF, 60, 0});
                 noteOffSent = true;
-                std::cerr << "MIDI Note Off: frame " << offset << " (C4)\\n";
+                std::cerr << "MIDI Note Off: frame " << offset << " (C4)\n";
             }
 
             if (diagnostic && !allNotesOffSent && offset >= sampleRate * 3)
@@ -78,7 +78,7 @@ int main(int argc, char** argv)
                 hardware.sendMidi({synthLib::MidiEventSource::Host,
                                    synthLib::M_CONTROLCHANGE, 123, 0});
                 allNotesOffSent = true;
-                std::cerr << "MIDI CC123 All Notes Off: frame " << offset << "\\n";
+                std::cerr << "MIDI CC123 All Notes Off: frame " << offset << "\n";
             }
             hardware.processAudio(blockSize, blockSize);
             const auto& outs = hardware.getAudioOutputs();
