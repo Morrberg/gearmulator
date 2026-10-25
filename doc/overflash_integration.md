@@ -20,7 +20,7 @@ Keep Gearmulator's original player and DSP execution path intact. First identify
 4. Reset and device-state serialization.
 5. Diagnostic logging outside audio callbacks.
 
-An Overflash-side `IInstrumentEngine` adapter will sit behind an explicit opt-in build flag. It must not silently fall back to Overflash's approximate Nord Lead DSP when Gearmulator firmware is missing. The first milestone is a standalone, reproducible WAV reference render before DPF plugin integration.
+An Overflash-side `IInstrumentEngine` adapter will sit behind an explicit opt-in build flag. It must not silently fall back to Overflash's approximate Nord Lead DSP when Gearmulator firmware is missing. An opt-in standalone C++ WAV reference renderer is now committed. It has not yet been compiled or executed with firmware; verify the CMake build and audio output before DPF plugin integration.
 
 ## Comparison
 
@@ -33,3 +33,17 @@ Use the Overflash baseline renderer `overflash_nordlead_reference_render` and `t
 ## Current status
 
 Planning and traceability only. The bridge and functioning Nodal Red 2x audio rendering are **not yet implemented or verified**.
+
+
+## Offline render commands
+
+On a local checkout of this branch with its required submodules:
+
+```sh
+cmake -S . -B build -Dgearmulator_BUILD_JUCEPLUGIN=OFF -DGEARMULATOR_BUILD_OVERFLASH_N2X_REFERENCE=ON
+cmake --build build --target n2xOverflashReference --config Release
+# Resolve the executable path according to your platform and CMake generator:
+./build/source/claudia/n2x/n2xTestConsole/n2xOverflashReference /private/location/nord_lead_2x.bin nodal_reference.wav
+```
+
+The executable takes a **local, uncompressed 512 KiB firmware .bin** as its first argument, verifies its Nodal Red 2x signature, and writes the requested WAV to the second argument. Extract the firmware locally from your ZIP; never commit the ZIP or BIN. The test sends MIDI note C4 at time 0, releases it after 2 seconds and captures 3 seconds at the native 98,304 Hz. The model's boot preset is not matched to Overflash's parameters. This is a comparison fixture, not an officially supported standalone release.
