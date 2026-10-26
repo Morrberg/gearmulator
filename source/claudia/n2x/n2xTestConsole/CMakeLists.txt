@@ -21,3 +21,13 @@ if(GEARMULATOR_BUILD_OVERFLASH_N2X_REFERENCE)
     target_link_libraries(n2xOverflashReference PRIVATE n2xLib)
     set_property(TARGET n2xOverflashReference PROPERTY FOLDER "N2x")
 endif()
+
+# Explicit opt-in shared C ABI. Not part of normal Gearmulator builds.
+option(GEARMULATOR_BUILD_OVERFLASH_N2X_BRIDGE "Build Nord Lead 2X Overflash C ABI shared library" OFF)
+if(GEARMULATOR_BUILD_OVERFLASH_N2X_BRIDGE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    add_library(n2xOverflashBridge SHARED n2xOverflashBridge.cpp)
+    target_link_libraries(n2xOverflashBridge PRIVATE n2xLib)
+    target_compile_features(n2xOverflashBridge PRIVATE cxx_std_17)
+    set_property(TARGET n2xOverflashBridge PROPERTY FOLDER "N2x")
+endif()
