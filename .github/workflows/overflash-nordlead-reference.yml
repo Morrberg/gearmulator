@@ -3,6 +3,11 @@ name: Overflash Nord Lead 2X build (manual)
 on:
   workflow_dispatch:
     inputs:
+      build_bridge:
+        description: "Also build the experimental shared N2X bridge library"
+        required: true
+        default: false
+        type: boolean
       source_ref:
         description: "Gearmulator branch to build"
         required: true
@@ -37,6 +42,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -Dgearmulator_BUILD_JUCEPLUGIN=OFF \
             -DGEARMULATOR_BUILD_OVERFLASH_N2X_REFERENCE=ON \
+            -DGEARMULATOR_BUILD_OVERFLASH_N2X_BRIDGE=${{ inputs.build_bridge && 'ON' || 'OFF' }} \
             -Dgearmulator_SYNTH_OSIRUS=OFF \
             -Dgearmulator_SYNTH_OSTIRUS=OFF \
             -Dgearmulator_SYNTH_VAVRA=OFF \
@@ -47,6 +53,24 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release
       - name: Build Nodal Red 2x WAV renderer
         run: cmake --build build --target n2xOverflashReference --parallel 2
+      - name: Build shared Overflash bridge
+        if: inputs.build_bridge
+        run: cmake --build build --target n2xOverflashBridge --parallel 2
+      - name: Collect shared bridge
+        if: inputs.build_bridge
+        run: |
+          find build -type f \( -name 'libn2xOverflashBridge.so*' -o -name 'n2xOverflashBridge.dll' -o -name 'libn2xOverflashBridge.dylib' \) -exec cp '{}' ./ ';'
+          test -s ./libn2xOverflashBridge.so || test -s ./libn2xOverflashBridge.dylib || test -s ./n2xOverflashBridge.dll
+      - name: Upload shared bridge (no firmware)
+        if: inputs.build_bridge
+        uses: actions/upload-artifact@v4
+        with:
+          name: n2xOverflashBridge-linux
+          path: |
+            libn2xOverflashBridge.so*
+            libn2xOverflashBridge.dylib
+            n2xOverflashBridge.dll
+          retention-days: 1
       - name: Find executable
         run: |
           find build -type f -name n2xOverflashReference -exec cp '{}' ./n2xOverflashReference ';'
