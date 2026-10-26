@@ -6,6 +6,7 @@
 #include "dsp56kEmu/utils.h"
 #include "synthLib/midiTypes.h"
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -14,8 +15,9 @@
 struct N2xOverflashHandle {
     std::unique_ptr<n2x::Hardware> hardware;
     std::unique_ptr<n2x::State> state;
-    std::vector<float> scratchLeft;
-    std::vector<float> scratchRight;
+    std::array<float, 64> cachedLeft{};
+    std::array<float, 64> cachedRight{};
+    uint32_t cachedCursor{64};
 };
 
 extern "C" N2xOverflashHandle* n2x_overflash_create(const char* rom_path) {
@@ -55,25 +57,30 @@ extern "C" int n2x_overflash_render(N2xOverflashHandle* h, float* left,
                                         float* right, uint32_t frames) {
     if (!h || !h->hardware || !left || !right || frames == 0) return -1;
     try {
-        // Keep the bridge allocation-free in the normal audio callback after
-        // prepare: Overflash supplies blocks no larger than the prepared size.
-        for (uint32_t offset = 0; offset < frames;) {
-            const uint32_t count = std::min<uint32_t>(64, frames - offset);
-            h->hardware->processAudio(count, count);
-            const auto& outs = h->hardware->getAudioOutputs();
-            for (uint32_t i = 0; i < count; ++i) {
-                auto signedWord = [](dsp56k::TWord value) {
-                    return dsp56k::signextend<int32_t, 24>(
-                        static_cast<int32_t>(value));
-                };
-                const int32_t l = std::clamp(signedWord(outs[0][i])
-                                    + signedWord(outs[2][i]), -0x800000, 0x7fffff);
-                const int32_t r = std::clamp(signedWord(outs[1][i])
-                                    + signedWord(outs[3][i]), -0x800000, 0x7fffff);
-                left[offset + i] = static_cast<float>(l / 8388608.0);
-                right[offset + i] = static_cast<float>(r / 8388608.0);
+        // Keep emulation in fixed-size native blocks. Host render requests may
+        // be any size. MIDI arriving mid-block is applied on the next native
+        // 64-frame boundary (<=63 native frames of MIDI timing quantization).
+        auto signedWord = [](dsp56k::TWord value) {
+            return dsp56k::signextend<int32_t, 24>(
+                static_cast<int32_t>(value));
+        };
+        for (uint32_t i = 0; i < frames; ++i) {
+            if (h->cachedCursor == 64) {
+                h->hardware->processAudio(64, 64);
+                const auto& outs = h->hardware->getAudioOutputs();
+                for (uint32_t j = 0; j < 64; ++j) {
+                    const int32_t l = std::clamp(signedWord(outs[0][j])
+                        + signedWord(outs[2][j]), -0x800000, 0x7fffff);
+                    const int32_t r = std::clamp(signedWord(outs[1][j])
+                        + signedWord(outs[3][j]), -0x800000, 0x7fffff);
+                    h->cachedLeft[j] = static_cast<float>(l / 8388608.0);
+                    h->cachedRight[j] = static_cast<float>(r / 8388608.0);
+                }
+                h->cachedCursor = 0;
             }
-            offset += count;
+            left[i] = h->cachedLeft[h->cachedCursor];
+            right[i] = h->cachedRight[h->cachedCursor];
+            ++h->cachedCursor;
         }
         return 0;
     } catch (...) { return -2; }
