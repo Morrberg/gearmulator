@@ -31,6 +31,13 @@ project(gearmulator VERSION 2.2.28)
 
 include(source/cmake/base.cmake)
 include(CTest)
+# The optional shared Overflash bridge links static DSP/MCU libraries.
+# Enable PIC before subdirectories create those targets (Linux/ELF).
+option(GEARMULATOR_BUILD_OVERFLASH_N2X_BRIDGE "Build optional N2X C ABI library" OFF)
+if(GEARMULATOR_BUILD_OVERFLASH_N2X_BRIDGE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 
 option(${PROJECT_NAME}_BUILD_JUCEPLUGIN "Build Juce plugin" on)
 option(${PROJECT_NAME}_BUILD_JUCEPLUGIN_CLAP "Build CLAP version of Juce plugin" on)
