@@ -12,6 +12,8 @@
 #include <vector>
 #include "n2xLib/n2xhardware.h"
 #include "n2xLib/n2xtypes.h"
+#include "n2xLib/n2xstate.h"
+#include "dsp56kEmu/utils.h"
 #include "synthLib/consoleTools.h"
 #include "synthLib/midiTypes.h"
 
@@ -19,7 +21,7 @@ int main(int argc, char** argv)
 {
     if (argc < 3 || argc > 4)
     {
-        std::cerr << "Usage: n2xOverflashReference /path/to/nord_lead_2x.bin output.wav [diagnostic]\n";
+        std::cerr << "Usage: n2xOverflashReference /path/to/nord_lead_2x.bin output.wav [diagnostic|raw]\n";
         std::cerr << "Reads user-supplied firmware locally; no firmware is included.\n";
         return 2;
     }
@@ -27,8 +29,9 @@ int main(int argc, char** argv)
     // Diagnostic mode compares note-off and an additional All Notes Off
     // command. The latter is deliberately absent from the standard A/B case.
     const bool diagnostic = argc == 4 && std::string(argv[3]) == "diagnostic";
-    if (argc == 4 && !diagnostic) {
-        std::cerr << "Unknown mode; expected diagnostic\n";
+    const bool raw = argc == 4 && std::string(argv[3]) == "raw";
+    if (argc == 4 && !diagnostic && !raw) {
+        std::cerr << "Unknown mode; expected diagnostic or raw\n";
         return 2;
     }
     constexpr uint32_t blockSize = 64;
@@ -52,6 +55,18 @@ int main(int argc, char** argv)
             std::cerr << "Nord Lead 2X ROM missing or invalid\n";
             return 1;
         }
+        // The regular n2x::Device constructs State immediately after Hardware.
+        // State supplies a standard single/multi patch and queues it as SysEx.
+        // 'raw' intentionally reproduces the historical test's missing init.
+        std::unique_ptr<n2x::State> patchState;
+        if (!raw)
+        {
+            patchState = std::make_unique<n2x::State>(&hardware, nullptr);
+            std::cerr << "Queued Gearmulator default single/multi patch\\n";
+        }
+        else
+            std::cerr << "Raw hardware mode: no patch initialization\\n";
+
         synthLib::StereoWavSink sink(argv[2], sampleRate);
         std::vector<dsp56k::TWord> left(blockSize), right(blockSize);
         bool noteOnSent = false;
@@ -84,8 +99,16 @@ int main(int argc, char** argv)
             const auto& outs = hardware.getAudioOutputs();
             for (size_t i = 0; i < blockSize; ++i)
             {
-                left[i] = outs[0][i] + outs[2][i];
-                right[i] = outs[1][i] + outs[3][i];
+                // Hardware exposes signed 24-bit DSP words encoded in TWord.
+                // Saturate in signed 32-bit space before encoding back to 24-bit.
+                const auto combine = [](dsp56k::TWord a, dsp56k::TWord b) {
+                    const int32_t x = dsp56k::signextend<int32_t, 24>(static_cast<int32_t>(a));
+                    const int32_t y = dsp56k::signextend<int32_t, 24>(static_cast<int32_t>(b));
+                    return static_cast<dsp56k::TWord>(
+                        std::clamp(x + y, -0x800000, 0x7fffff)) & 0xffffff;
+                };
+                left[i] = combine(outs[0][i], outs[2][i]);
+                right[i] = combine(outs[1][i], outs[3][i]);
             }
             sink.write(left.data(), right.data(), blockSize);
         }
