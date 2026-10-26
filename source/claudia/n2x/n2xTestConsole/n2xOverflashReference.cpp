@@ -62,10 +62,10 @@ int main(int argc, char** argv)
         if (!raw)
         {
             patchState = std::make_unique<n2x::State>(&hardware, nullptr);
-            std::cerr << "Queued Gearmulator default single/multi patch\\n";
+            std::cerr << "Queued Gearmulator default single/multi patch\n";
         }
         else
-            std::cerr << "Raw hardware mode: no patch initialization\\n";
+            std::cerr << "Raw hardware mode: no patch initialization\n";
 
         synthLib::StereoWavSink sink(argv[2], sampleRate);
         std::vector<dsp56k::TWord> left(blockSize), right(blockSize);
