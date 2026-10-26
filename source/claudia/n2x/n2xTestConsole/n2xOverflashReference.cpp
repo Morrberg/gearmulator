@@ -21,7 +21,7 @@ int main(int argc, char** argv)
 {
     if (argc < 3 || argc > 4)
     {
-        std::cerr << "Usage: n2xOverflashReference /path/to/nord_lead_2x.bin output.wav [diagnostic|raw]\n";
+        std::cerr << "Usage: n2xOverflashReference /path/to/nord_lead_2x.bin output.wav [diagnostic|raw|matched]\n";
         std::cerr << "Reads user-supplied firmware locally; no firmware is included.\n";
         return 2;
     }
@@ -30,8 +30,9 @@ int main(int argc, char** argv)
     // command. The latter is deliberately absent from the standard A/B case.
     const bool diagnostic = argc == 4 && std::string(argv[3]) == "diagnostic";
     const bool raw = argc == 4 && std::string(argv[3]) == "raw";
-    if (argc == 4 && !diagnostic && !raw) {
-        std::cerr << "Unknown mode; expected diagnostic or raw\n";
+    const bool matched = argc == 4 && std::string(argv[3]) == "matched";
+    if (argc == 4 && !diagnostic && !raw && !matched) {
+        std::cerr << "Unknown mode; expected diagnostic, raw or matched\n";
         return 2;
     }
     constexpr uint32_t blockSize = 64;
@@ -62,7 +63,36 @@ int main(int argc, char** argv)
         if (!raw)
         {
             patchState = std::make_unique<n2x::State>(&hardware, nullptr);
-            std::cerr << "Queued Gearmulator default single/multi patch\n";
+            if (matched)
+            {
+                // Controlled single oscillator test. Register values are N2X
+                // device controls, NOT exact Hz/seconds conversions.
+                auto preset = patchState->getSingle(0);
+                const auto set = [&](n2x::SingleParam key, uint8_t value) {
+                    n2x::State::changeSingleParameter(preset, key, value);
+                };
+                set(n2x::SingleParam::O1Waveform, 0); // saw on N2X
+                set(n2x::SingleParam::Mix, 0);        // oscillator 1 only
+                set(n2x::SingleParam::Cutoff, 127);   // maximum
+                set(n2x::SingleParam::Resonance, 0);
+                set(n2x::SingleParam::FilterEnvAmount, 0);
+                set(n2x::SingleParam::FilterType, 0);
+                set(n2x::SingleParam::AmpEnvA, 0);
+                set(n2x::SingleParam::AmpEnvD, 0);
+                set(n2x::SingleParam::AmpEnvS, 127);
+                set(n2x::SingleParam::AmpEnvR, 0);
+                set(n2x::SingleParam::Lfo1Level, 0);
+                set(n2x::SingleParam::FmDepth, 0);
+                set(n2x::SingleParam::Unison, 0);
+                set(n2x::SingleParam::Portamento, 0);
+                synthLib::SMidiEvent patch(synthLib::MidiEventSource::Host);
+                patch.sysex.assign(preset.begin(), preset.begin() + n2x::g_singleDumpSize);
+                hardware.sendMidi(patch);
+                std::cerr << "Matched patch queued: saw 1, osc 2 off, "
+                          << "max cutoff, no resonance/modulation, "
+                          << "instant attack/release and full sustain\\n";
+            }
+            std::cerr << "Queued Gearmulator default single/multi patch\\n";
         }
         else
             std::cerr << "Raw hardware mode: no patch initialization\n";
